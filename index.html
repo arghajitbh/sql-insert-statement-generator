@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Insert Generator Github: @arghajitbh</title>
+    <meta name="title" content="SQL Insert Statement Generator">
+    <meta name="description" content="A standalone, browser-based tool to parse SQL schemas, manage rows in an interactive UI table, and instantly generate bulk INSERT statements.">
+    <meta name="keywords" content="SQL, SQL generator, Insert statement generator, DB tools, Web SQL tool, developer utilities, raw SQL parser">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="English">
+    <meta name="author" content="Your Name/Organization">
+    
+    <!-- Open Graph / Facebook / LinkedIn (For Social Media Consumption) -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="SQL Insert Statement Generator">
+    <meta property="og:description" content="Convert SQL schemas into data-entry tables and generate bulk INSERT scripts instantly inside your browser. No server required.">
+    <meta property="og:image" content="https://yourdomain.com">
+    <meta property="og:site_name" content="SQL Insert Tool">
+    
+    <!-- Twitter / X Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SQL Insert Statement Generator">
+    <meta name="twitter:description" content="Convert SQL schemas into data-entry tables and generate bulk INSERT scripts instantly inside your browser. No server required.">
+    <meta name="twitter:image" content="https://yourdomain.com">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React and ReactDOM CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel Standalone for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function SqlGeneratorApp() {
+            // Panel 1 State: Raw SQL Input
+            const [sqlInput, setSqlInput] = useState('');
+            // Panel 2 State: Table Metadata and Row Data
+            const [tableName, setTableName] = useState("");
+            const [columns, setColumns] = useState([]);
+            const [rows, setRows] = useState([]);
+
+            useEffect(() => {
+                if (!sqlInput.trim()) {
+                    setTableName("");
+                    setColumns([]);
+                    setRows([]);
+                    return;
+                }
+                console.log("Parsing SQL Input...");
+                let sqlString = sqlInput || "";
+                const cleanSql = sqlString
+                                .replace(/--.*$/gm, '') // Remove single-line comments
+                                .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
+                                .replace(/\s+/g, ' '); // Normalize whitespaces
+                
+                const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)/i;
+                const tableMatch = cleanSql.match(tableRegex);
+                const tableName = tableMatch ? tableMatch[1].trim() : null;
+                console.log("Extracted Table Name:", tableName);
+                if (!tableName) {
+                    setTableName("");
+                    setColumns([]);
+                    setRows([]);
+                    return;
+                }
+                const firstParenIndex = cleanSql.indexOf('(');
+                const lastParenIndex = cleanSql.lastIndexOf(')');
+
+
+                if (firstParenIndex === -1 || lastParenIndex === -1) {
+                    return { tableName, columns: [] };
+                }
+                console.log("First Parenthesis Index:", firstParenIndex);
+                console.log("Last Parenthesis Index:", lastParenIndex);
+                const columnsBlock = cleanSql.substring(firstParenIndex + 1, lastParenIndex);
+
+                const columnDefinitions = columnsBlock.split(/,(?=(?:[^']*'[^']*')*[^']*$)/);
+
+                const columns = [];
+                console.log("Column Definitions:", columnDefinitions);
+                columnDefinitions.forEach(colDef => {
+                    const trimmedDef = colDef.trim();
+                    
+                    // Filter out constraints, primary keys, or empty strings
+                    if (!trimmedDef || /^CONSTRAINT|^PRIMARY\s+KEY|^FOREIGN\s+KEY/i.test(trimmedDef)) {
+                        return;
+                    }
+
+                    // Check if the column definition contains the DEFAULT keyword
+                    const hasDefault = /\bDEFAULT\b/i.test(trimmedDef);
+
+                    if (!hasDefault) {
+                        // Extract the first word as the column name
+                        const columnNameMatch = trimmedDef.match(/^([^\s]+)/);
+                        if (columnNameMatch) {
+                            columns.push(columnNameMatch[1].replace(/[`"]/g, '')); // Strip backticks or quotes if present
+                        }
+                    }
+                });
+                console.log("Extracted Columns:", columns);
+                setTableName(tableName || "");
+                setColumns(columns);
+
+                
+            }, [sqlInput]);
+
+
+            // Panel 3 State: Generated Output
+            const [generatedSql, setGeneratedSql] = useState("");
+
+            // Add a new empty row to Panel 2
+            const handleAddRow = () => {
+                const newRow = {};
+                columns.forEach(col => {
+                    newRow[col] = "";
+                });
+                setRows([...rows, newRow]);
+            };
+
+            // Update cell data when user types in Panel 2 textareas
+            const handleInputChange = (rowIndex, colName, value) => {
+                // const updatedRows = [...rows];
+                // updatedRows[rowIndex][colName] = value;
+                // setRows(updatedRows);
+                setRows(prevRows => {
+                    const updatedRows = [...prevRows];
+                    // Safely instantiate row if it doesn't exist yet
+                    if (!updatedRows[rowIndex]) {
+                        updatedRows[rowIndex] = {};
+                    }
+                    updatedRows[rowIndex][colName] = value;
+                    return updatedRows;
+                });
+            };
+
+            // Panel 3 Action: Build the final INSERT INTO script
+            const handleGenerate = () => {
+                if (rows.length === 0 || columns.length === 0) {
+                    setGeneratedSql("-- No data or columns available to generate inserts.");
+                    return;
+                }
+
+                const columnList = columns.join(", ");
+                
+                const valueLines = rows.map(row => {
+                    const values = columns.map(col => {
+                        const val = row[col] || "";
+                        // Simple check to wrap strings/empty values in quotes, leave numbers bare
+                        if (val === "") return "NULL";
+                        return isNaN(val) ? `"${val.replace(/'/g, "''")}"` : val;
+                    });
+                    return `(${values.join(", ")})`;
+                }).join(",\n");
+
+                const insertStatement = `INSERT INTO ${tableName} (${columnList})\nVALUES\n${valueLines};`;
+                setGeneratedSql(insertStatement);
+            };
+
+            return (
+                <div class="max-w-7xl mx-auto space-y-6">
+                    <header class="mb-4 text-center">
+                        <h1 class="text-2xl font-bold text-gray-800">SQL Insert Statement Generator</h1>
+                        <p class="text-sm text-gray-600">Paste schema, manage table rows, and generate bulk inserts.</p>
+                        <p class="text-xs text-gray-600">@author: https://github.com/arghajitbh</p>
+                    </header>
+
+                    {/* PANEL 1: CREATE SQL INPUT */}
+                    <div class="w-full bg-white shadow rounded-lg p-4">
+                        <h2 class="text-lg font-semibold mb-2 text-gray-700">Panel 1: SQL Schema Input</h2>
+                        <pre class="w-full bg-gray-900 text-green-400 p-4 rounded font-mono text-sm overflow-x-auto">
+                            <textarea 
+                                class="w-full bg-transparent text-green-400 font-mono outline-none resize-y min-h-[120px]"
+                                value={sqlInput}
+                                onChange={(e) => setSqlInput(e.target.value)}
+                                placeholder="Paste your CREATE TABLE statement here..."
+                            />
+                        </pre>
+                        <p class="text-xs text-gray-500 mt-1">* Parsing logic can be hooked into this structural state variable.</p>
+                    </div>
+
+                    {/* PANEL 2: INTERACTIVE DATA TABLE */}
+                    <div class="w-full bg-white shadow rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-semibold text-gray-700">Panel 2: Data Input Table</h2>
+                            <button 
+                                onClick={handleAddRow}
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 rounded text-sm transition"
+                            >
+                                + Add Row
+                            </button>
+                        </div>
+                        
+                        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        {columns.map((col, index) => (
+                                            <th key={index} class="px-4 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider">
+                                                {col}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    {rows.map((row, rowIndex) => (
+                                        <tr key={rowIndex} class="hover:bg-gray-50">
+                                            {columns.map((col, colIndex) => (
+                                                <td key={colIndex} class="px-2 py-2 whitespace-nowrap">
+                                                    <textarea
+                                                        rows="1"
+                                                        class="w-full p-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-gray-800 resize-none font-mono"
+                                                        value={row[col] || ""}
+                                                        onChange={(e) => handleInputChange(rowIndex, col, e.target.value)}
+                                                    />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* TRIGGER BUTTON */}
+                    <div class="flex justify-center">
+                        <button 
+                            onClick={handleGenerate}
+                            class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transform hover:scale-[1.01] transition text-lg"
+                        >
+                            Generate INSERT Statement
+                        </button>
+                    </div>
+
+                    {/* PANEL 3: GENERATED INSERT OUTPUT */}
+                    <div class="w-full bg-white shadow rounded-lg p-4">
+                        <h2 class="text-lg font-semibold mb-2 text-gray-700">Panel 3: Generated Output</h2>
+                        <pre class="w-full bg-gray-800 text-amber-400 p-4 rounded font-mono text-sm overflow-x-auto min-h-[150px] whitespace-pre-wrap">
+                            {generatedSql || "-- Click Generate to populate this field --"}
+                        </pre>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<SqlGeneratorApp />);
+    </script>
+</body>
+</html>
