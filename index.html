@@ -155,7 +155,7 @@
                         const val = row[col] || "";
                         // Simple check to wrap strings/empty values in quotes, leave numbers bare
                         if (val === "") return "NULL";
-                        return isNaN(val) ? `"${val.replace(/'/g, "''")}"` : val;
+                        return isNaN(val) ? `"${val}"` : val;
                     });
                     return `(${values.join(", ")})`;
                 }).join(",\n");
