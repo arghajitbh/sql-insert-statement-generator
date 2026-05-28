@@ -23,6 +23,7 @@
     <meta name="twitter:title" content="SQL Insert Statement Generator">
     <meta name="twitter:description" content="Convert SQL schemas into data-entry tables and generate bulk INSERT scripts instantly inside your browser. No server required.">
     <meta name="twitter:image" content="https://yourdomain.com">
+    
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -155,7 +156,7 @@
                         const val = row[col] || "";
                         // Simple check to wrap strings/empty values in quotes, leave numbers bare
                         if (val === "") return "NULL";
-                        return isNaN(val) ? `"${val.replace(/"/g, '\\"')}"`}"` : val;
+                        return isNaN(val) ? `"${val.replace(/"/g, '\\"')}"` : val;
                     });
                     return `(${values.join(", ")})`;
                 }).join(",\n");
@@ -211,12 +212,12 @@
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     {rows.map((row, rowIndex) => (
-                                        <tr key={rowIndex} class="hover:bg-gray-50">
+                                        <tr key={rowIndex} class="hover:bg-gray-50 has-[:focus]:h-32">
                                             {columns.map((col, colIndex) => (
-                                                <td key={colIndex} class="px-2 py-2 whitespace-nowrap">
+                                                <td key={colIndex} class="px-2 py-2 whitespace-nowrap h-inherit">
                                                     <textarea
-                                                        rows="1"
-                                                        class="w-full p-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-gray-800 resize-none font-mono"
+                                                        // rows="1"
+                                                        class="w-full p-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-gray-800 resize-none h-full font-mono"
                                                         value={row[col] || ""}
                                                         onChange={(e) => handleInputChange(rowIndex, col, e.target.value)}
                                                     />
